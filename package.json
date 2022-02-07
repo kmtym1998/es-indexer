@@ -3,5 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "author": "kmtym1998 <kmtym.devloper@gmail.com>",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "csv-parse": "^5.0.4",
+    "jaconv": "^1.0.4"
+  }
 }
