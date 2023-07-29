@@ -1,4 +1,4 @@
-package model
+package node
 
 import (
 	"fmt"

@@ -9,7 +9,7 @@ import (
 
 	"github.com/kmtym1998/es-indexer/elasticsearch"
 	"github.com/kmtym1998/es-indexer/logger"
-	"github.com/kmtym1998/es-indexer/model"
+	"github.com/kmtym1998/es-indexer/node"
 	"github.com/pkg/errors"
 	"golang.org/x/exp/slog"
 
@@ -37,7 +37,7 @@ func main() {
 
 	r := csv.NewReader(f)
 
-	var documentList model.AddressList
+	var documentList node.AddressList
 	var errList []error
 	for i := 1; ; i++ {
 		record, err := r.Read()
@@ -56,7 +56,7 @@ func main() {
 				}
 			}()
 
-			documentList = append(documentList, model.Address{
+			documentList = append(documentList, node.Address{
 				ID:               i,
 				ZipCode:          record[2],
 				PrefectureKana:   moji.Convert(record[3], moji.HK, moji.ZK),
