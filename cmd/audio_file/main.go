@@ -16,8 +16,7 @@ import (
 	"golang.org/x/exp/slog"
 )
 
-func main() {
-	ctx := context.Background()
+func Run(ctx context.Context, rootDir string) error {
 	l := logger.New(logger.Opts{
 		Level: slog.LevelDebug,
 	})
@@ -29,20 +28,8 @@ func main() {
 		}
 	}()
 
-	rootDir := flag.String("rootDir", "", "オーディオファイルのルートディレクトリ")
-	flag.Parse()
-
-	if lo.FromPtr(rootDir) == "" {
-		err := errors.New("rootDir is required")
-		l.Error(err.Error(), err)
-
-		return
-	}
-
-	l.Debug(*rootDir)
-
 	var documentList node.AudioFileList
-	if err := filepath.WalkDir(*rootDir, func(path string, d os.DirEntry, err error) error {
+	if err := filepath.WalkDir(rootDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			l.Error(fmt.Sprintf("error walking on: %s", path), err)
 			return err
@@ -71,7 +58,7 @@ func main() {
 	}); err != nil {
 		l.Error("failed to walk directory", err)
 
-		return
+		return errors.Wrap(err, "failed to walk directory")
 	}
 
 	// debug
@@ -93,5 +80,31 @@ func main() {
 		}
 
 		l.Error("failed to bulk insert", err)
+	}
+
+	return nil
+}
+
+func main() {
+	ctx := context.Background()
+	l := logger.New(logger.Opts{
+		Level: slog.LevelDebug,
+	})
+	l = l.WithCtx(ctx)
+
+	rootDir := flag.String("rootDir", "", "オーディオファイルのルートディレクトリ")
+	flag.Parse()
+
+	if lo.FromPtr(rootDir) == "" {
+		err := errors.New("rootDir is required")
+		l.Error(err.Error(), err)
+
+		return
+	}
+
+	l.Debug(*rootDir)
+
+	if err := Run(ctx, *rootDir); err != nil {
+		l.Error("failed to index audio files", err)
 	}
 }
