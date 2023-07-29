@@ -23,7 +23,7 @@ func main() {
 	})
 	l = l.WithCtx(ctx)
 
-	f, err := os.Open("./data/ken_all.csv")
+	f, err := os.Open("./data/address_ken_all.csv")
 	if err != nil {
 		l.Error("failed to open csv", err)
 	}
