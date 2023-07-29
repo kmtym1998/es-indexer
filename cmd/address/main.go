@@ -23,6 +23,12 @@ func main() {
 	})
 	l = l.WithCtx(ctx)
 
+	defer func() {
+		if err := recover(); err != nil {
+			l.Error("panic occurred", errors.New(fmt.Sprint(err)))
+		}
+	}()
+
 	f, err := os.Open("./data/address_ken_all.csv")
 	if err != nil {
 		l.Error("failed to open csv", err)
@@ -40,20 +46,29 @@ func main() {
 		}
 		if err != nil {
 			errList = append(errList, errors.Wrap(err, "failed to read csv"))
+			continue
 		}
 
-		documentList = append(documentList, model.Address{
-			ID:               i,
-			ZipCode:          record[2],
-			PrefectureKana:   moji.Convert(record[3], moji.HK, moji.ZK),
-			MunicipalityKana: moji.Convert(record[4], moji.HK, moji.ZK),
-			TownKana:         moji.Convert(record[5], moji.HK, moji.ZK),
-			Prefecture:       record[6],
-			Municipality:     record[7],
-			Town:             record[8],
-			Concat:           fmt.Sprintf("%s%s%s", record[6], record[7], record[8]),
-			ConcatKana:       fmt.Sprintf("%s%s%s", moji.Convert(record[3], moji.HK, moji.ZK), moji.Convert(record[4], moji.HK, moji.ZK), moji.Convert(record[5], moji.HK, moji.ZK)),
-		})
+		func() {
+			defer func() {
+				if err := recover(); err != nil {
+					l.Warning("failed to parse csv row", errors.New(fmt.Sprint(err)))
+				}
+			}()
+
+			documentList = append(documentList, model.Address{
+				ID:               i,
+				ZipCode:          record[2],
+				PrefectureKana:   moji.Convert(record[3], moji.HK, moji.ZK),
+				MunicipalityKana: moji.Convert(record[4], moji.HK, moji.ZK),
+				TownKana:         moji.Convert(record[5], moji.HK, moji.ZK),
+				Prefecture:       record[6],
+				Municipality:     record[7],
+				Town:             record[8],
+				Concat:           fmt.Sprintf("%s%s%s", record[6], record[7], record[8]),
+				ConcatKana:       fmt.Sprintf("%s%s%s", moji.Convert(record[3], moji.HK, moji.ZK), moji.Convert(record[4], moji.HK, moji.ZK), moji.Convert(record[5], moji.HK, moji.ZK)),
+			})
+		}()
 	}
 
 	if len(errList) > 0 {
