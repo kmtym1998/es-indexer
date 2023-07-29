@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	e "errors"
 	"fmt"
-	"kmtym1998/es-zip-codes/model"
-	"log"
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/cockroachdb/errors"
+	"github.com/kmtym1998/es-indexer/logger"
+	"golang.org/x/exp/slog"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/dustin/go-humanize"
@@ -17,14 +20,25 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/esutil"
 )
 
-type esservice struct{
+type client struct {
 	client *elasticsearch.Client
+	logger logger.Logger
 }
 
-func NewClient() (*esservice, error) {
+type DocumentNode interface {
+	NodeIdentifier() string
+}
+
+type DocumentNodeList interface {
+	IndexName() string
+	ToList() []DocumentNode
+}
+
+func NewClient(l logger.Logger) (*client, error) {
 	retryBackoff := backoff.NewExponentialBackOff()
 	ELASTIC_USER_PASSWORD := os.Getenv("ELASTIC_USER_PASSWORD")
-	es, err := elasticsearch.NewClient(elasticsearch.Config{
+
+	esClient, err := elasticsearch.NewClient(elasticsearch.Config{
 		Username:      "elastic",
 		Password:      ELASTIC_USER_PASSWORD,
 		RetryOnStatus: []int{502, 503, 504, 429},
@@ -32,76 +46,107 @@ func NewClient() (*esservice, error) {
 			if i == 1 {
 				retryBackoff.Reset()
 			}
+
 			return retryBackoff.NextBackOff()
 		},
 		MaxRetries: 5,
 	})
 	if err != nil {
-		log.Printf("elasticsearch.NewClient:%v", err)
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create elasticsearch client")
 	}
 
-	return &esservice{client: es}, nil
+	return &client{
+		client: esClient,
+		logger: l,
+	}, nil
 }
 
-func (es *esservice) BulkInsertProducts(indexName string, addresses []*model.Address) error {
+func (es *client) BulkInsert(ctx context.Context, nodeList DocumentNodeList) error {
 	bi, err := esutil.NewBulkIndexer(esutil.BulkIndexerConfig{
-		Index:         indexName,
+		Index:         nodeList.IndexName(),
 		Client:        es.client,
 		NumWorkers:    runtime.NumCPU(),
 		FlushBytes:    int(5e+6),
 		FlushInterval: 30 * time.Second,
 	})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create bulk indexer")
 	}
+	es.logger.Debug("new bulk indexer created")
 
+	es.logger.Debug("start bulk insert")
+
+	var errList []error
 	start := time.Now().UTC()
-	for _, a := range addresses {
-		data, err := json.Marshal(a)
+	for _, node := range nodeList.ToList() {
+		body, err := json.Marshal(node)
 		if err != nil {
-			return err
+			return errors.Wrap(err, "json marshal error")
 		}
-		err = bi.Add(
-			context.Background(),
+
+		if err := bi.Add(
+			ctx,
 			esutil.BulkIndexerItem{
-				Index:      indexName,
+				Index:      nodeList.IndexName(),
 				Action:     "index",
-				DocumentID: fmt.Sprint(a.ID),
-				Body:       bytes.NewReader(data),
-				OnFailure: func(ctx context.Context, item esutil.BulkIndexerItem, res esutil.BulkIndexerResponseItem, err error) {
-					if err != nil {
-						log.Printf("ERROR index: %s", err)
-					} else {
-						log.Printf("ERROR index: %s: %s", res.Error.Type, res.Error.Reason)
+				DocumentID: node.NodeIdentifier(),
+				Body:       bytes.NewReader(body),
+				OnFailure: func(
+					failureCtx context.Context,
+					item esutil.BulkIndexerItem,
+					res esutil.BulkIndexerResponseItem,
+					err error,
+				) {
+					errMsg := fmt.Sprintf("failed to index document: %s", res.DocumentID)
+					l := es.logger.WithCtx(failureCtx)
+					if b, err := json.Marshal(res); err == nil {
+						l = l.With(slog.Any("errResponse", string(b)))
 					}
+
+					if err != nil {
+						errList = append(errList, errors.Wrap(err, errMsg))
+					} else {
+						errList = append(errList, errors.Wrap(err, errMsg))
+					}
+
+					l.Error(errMsg, err)
 				},
 			},
-		)
-		if err != nil {
-			log.Printf("ES Bulk insert error: %s", err)
-			return err
+		); err != nil {
+			errList = append(errList, errors.Wrap(err, "failed to add bulk indexer item"))
 		}
 	}
-	if err := bi.Close(context.Background()); err != nil {
-		return err
+
+	if len(errList) > 0 {
+		return e.Join(errList...)
 	}
+
+	if err := bi.Close(ctx); err != nil {
+		es.logger.Warning("failed to close bulk indexer", err)
+	}
+
 	biStats := bi.Stats()
-	dur := time.Since(start)
+	durFields := slog.Duration("duration", time.Since(start).Truncate(time.Millisecond))
+	statField := slog.Any("stats", biStats)
+
 	if biStats.NumFailed > 0 {
-		log.Fatalf(
-			"Indexed [%s] documents with [%s] errors in %s (%s docs/sec)",
-			humanize.Comma(int64(biStats.NumFlushed)),
-			humanize.Comma(int64(biStats.NumFailed)),
-			dur.Truncate(time.Millisecond),
-			humanize.Comma(int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed))),
+		es.logger.Warning(
+			fmt.Sprintf(
+				"some documents failed to index [%s]",
+				nodeList.IndexName(),
+			),
+			durFields,
+			statField,
 		)
 	} else {
-		log.Printf(
-			"Successfully indexed [%s] documents in %s (%s docs/sec)",
-			humanize.Comma(int64(biStats.NumFlushed)),
-			dur.Truncate(time.Millisecond),
-			humanize.Comma(int64(1000.0/float64(dur/time.Millisecond)*float64(biStats.NumFlushed))),
+		es.logger.Info(
+			fmt.Sprintf(
+				"successfully indexed [%s] documents in %s",
+				nodeList.IndexName(),
+				humanize.IBytes(uint64(biStats.NumFlushed)),
+			),
+			durFields,
+			statField,
 		)
 	}
 
