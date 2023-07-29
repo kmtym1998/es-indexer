@@ -1,0 +1,98 @@
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "unigram_analyzer": {
+          "type": "custom",
+          "tokenizer": "unigram_tokenizer"
+        },
+        "bigram_analyzer": {
+          "type": "custom",
+          "tokenizer": "bigram_tokenizer"
+        },
+        "trigram_analyzer": {
+          "type": "custom",
+          "tokenizer": "trigram_tokenizer"
+        }
+      },
+      "tokenizer": {
+        "unigram_tokenizer": {
+          "type": "ngram",
+          "min_gram": 1,
+          "max_gram": 1,
+          "token_chars": ["letter", "digit"]
+        },
+        "bigram_tokenizer": {
+          "type": "ngram",
+          "min_gram": 2,
+          "max_gram": 2,
+          "token_chars": ["letter", "digit"]
+        },
+        "trigram_tokenizer": {
+          "type": "ngram",
+          "min_gram": 3,
+          "max_gram": 3,
+          "token_chars": ["letter", "digit"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "zipCode": {
+        "type": "text",
+        "analyzer": "standard",
+        "fields": {
+          "unigram_field": {
+            "type": "text",
+            "analyzer": "unigram_analyzer"
+          },
+          "bigram_field": {
+            "type": "text",
+            "analyzer": "bigram_analyzer"
+          },
+          "trigram_field": {
+            "type": "text",
+            "analyzer": "trigram_analyzer"
+          }
+        }
+      },
+      "concat": {
+        "type": "text",
+        "analyzer": "standard",
+        "fields": {
+          "unigram_field": {
+            "type": "text",
+            "analyzer": "unigram_analyzer"
+          },
+          "bigram_field": {
+            "type": "text",
+            "analyzer": "bigram_analyzer"
+          },
+          "trigram_field": {
+            "type": "text",
+            "analyzer": "trigram_analyzer"
+          }
+        }
+      },
+      "concatKana": {
+        "type": "text",
+        "analyzer": "standard",
+        "fields": {
+          "unigram_field": {
+            "type": "text",
+            "analyzer": "unigram_analyzer"
+          },
+          "bigram_field": {
+            "type": "text",
+            "analyzer": "bigram_analyzer"
+          },
+          "trigram_field": {
+            "type": "text",
+            "analyzer": "trigram_analyzer"
+          }
+        }
+      }
+    }
+  }
+}
