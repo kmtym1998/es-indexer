@@ -2,8 +2,9 @@ package logger
 
 import (
 	"context"
-	"os"
+	"fmt"
 
+	"github.com/m-mizutani/clog"
 	"golang.org/x/exp/slog"
 )
 
@@ -19,50 +20,53 @@ type Opts struct {
 	OnError     ErrorHookFunc
 }
 
-type ErrorHookFunc func(ctx context.Context, msg string, err error, arg ...any)
+type ErrorHookFunc func(ctx context.Context, msg string, err error)
 
-func New(opts Opts) *Logger {
-	return &Logger{
-		ctx: context.Background(),
-		logger: slog.New(
-			slog.NewTextHandler(
-				os.Stdout,
-				&slog.HandlerOptions{Level: opts.Level, ReplaceAttr: opts.ReplaceAttr},
-			),
-		),
+func New(opts Opts) Logger {
+	handler := clog.New(
+		clog.WithColor(true),
+		clog.WithLevel(opts.Level),
+		clog.WithReplaceAttr(opts.ReplaceAttr),
+	)
+
+	return Logger{
+		ctx:     context.Background(),
+		logger:  slog.New(handler),
 		onError: opts.OnError,
 	}
 }
 
-func (l *Logger) WithCtx(ctx context.Context) *Logger {
-	return &Logger{
+func (l Logger) WithCtx(ctx context.Context) Logger {
+	return Logger{
 		ctx:     ctx,
 		logger:  l.logger,
 		onError: l.onError,
 	}
 }
 
-func (l *Logger) With(args ...any) *Logger {
-	return &Logger{
+func (l Logger) With(args ...any) Logger {
+	return Logger{
 		logger:  l.logger.With(args...),
 		onError: l.onError,
 	}
 }
 
-func (l *Logger) Debug(msg string, arg ...any) {
+func (l Logger) Debug(msg string, arg ...any) {
 	l.logger.Debug(msg, arg...)
 }
 
-func (l *Logger) Info(msg string, arg ...any) {
+func (l Logger) Info(msg string, arg ...any) {
 	l.logger.Info(msg, arg...)
 }
 
-func (l *Logger) Warning(msg string, arg ...any) {
+func (l Logger) Warning(msg string, arg ...any) {
 	l.logger.Warn(msg, arg...)
 }
 
-func (l *Logger) Error(msg string, err error, arg ...any) {
-	l.logger.Error(msg)
+func (l Logger) Error(msg string, err error, arg ...any) {
+	l.logger.With(
+		slog.String("stacktrace", fmt.Sprintf("%+v", err)),
+	).Error(msg)
 
 	go func() {
 		// エラーログ出力後なにかやりたい時 (sentry に送るとか) は OnError() を呼び元から渡す
