@@ -9,12 +9,13 @@ import (
 )
 
 type AudioFile struct {
-	FilePath string   `json:"filePath"`
-	FileName string   `json:"fileName"`
-	Artist   string   `json:"artist"`
-	Album    string   `json:"album"`
-	Title    string   `json:"title"`
-	Tags     []string `json:"tags"`
+	FilePath        string   `json:"filePath"`
+	FileName        string   `json:"fileName"`
+	Artists         []string `json:"artists"`
+	Album           string   `json:"album"`
+	Title           string   `json:"title"`
+	Tags            []string `json:"tags"`
+	ContainedTracks []string `json:"containedTracks"`
 }
 
 type AudioFileList []AudioFile
