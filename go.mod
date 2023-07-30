@@ -7,7 +7,7 @@ require (
 	github.com/cockroachdb/errors v1.10.0
 	github.com/dhowden/tag v0.0.0-20230630033851-978a0926ee25
 	github.com/dustin/go-humanize v1.0.0
-	github.com/elastic/go-elasticsearch/v8 v8.0.0-alpha
+	github.com/elastic/go-elasticsearch/v8 v8.9.0
 	github.com/ktnyt/go-moji v1.0.0
 	github.com/m-mizutani/clog v0.0.2
 	github.com/pkg/errors v0.9.1
